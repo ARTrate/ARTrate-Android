@@ -14,7 +14,6 @@ public class OscActivity extends AppCompatActivity {
     }
 
     public void goBack(View view) {
-        Intent intent = new Intent(OscActivity.this, MainActivity.class);
-        startActivity(intent);
+        finish();
     }
 }
