@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice;
 import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -71,5 +72,10 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_ENABLE_BT) {
             CheckBluetoothState();
         }
+    }
+
+    public void startOsc(View view) {
+        Intent intent = new Intent(MainActivity.this, OscActivity.class);
+        startActivity(intent);
     }
 }
