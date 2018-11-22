@@ -1,5 +1,6 @@
 package app.artrate.artrate;
 
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
@@ -8,9 +9,11 @@ import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortOut;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.Inet4Address;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -29,7 +32,7 @@ public class OscActivity extends AppCompatActivity {
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
-       // generateOscData();
+        generateOscData();
     }
 
     /**
@@ -41,20 +44,30 @@ public class OscActivity extends AppCompatActivity {
 
         while (true) {
             int bpm = ThreadLocalRandom.current().nextInt(50, 121);
-            message = new OSCMessage();
-            message.setAddress("192.168.178.28");
-            message.addArgument("/bpm");
-            message.addArgument(bpm);
+            Object[] payload = new Object[]{bpm};
+            new OscTask().execute(payload);
+            try {
+                TimeUnit.SECONDS.sleep(5);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Class for asynchronous network operations
+     */
+    private class OscTask extends AsyncTask {
+
+        @Override
+        protected Object doInBackground(Object[] payload) {
+            OSCMessage message = new OSCMessage("/bpm", Arrays.asList(payload));
             try {
                 oscPort.send(message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            try {
-                TimeUnit.SECONDS.sleep(5);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            return null;
         }
     }
 
