@@ -9,7 +9,6 @@ import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortOut;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.net.Inet4Address;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -20,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 public class OscActivity extends AppCompatActivity {
 
     private OSCPortOut oscPort;
+    private boolean shouldSend;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,46 +32,40 @@ public class OscActivity extends AppCompatActivity {
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
-        generateOscData();
+        shouldSend = true;
+        new OscTask().execute();
     }
 
-    /**
-     * method for generating random bpm and sending it to the OSC server
-     */
-    private void generateOscData() {
-
-        OSCMessage message;
-
-        while (true) {
-            int bpm = ThreadLocalRandom.current().nextInt(50, 121);
-            Object[] payload = new Object[]{bpm};
-            new OscTask().execute(payload);
-            try {
-                TimeUnit.SECONDS.sleep(5);
-            } catch (InterruptedException e) {
-                break;
-            }
-        }
-    }
 
     /**
      * Class for asynchronous network operations
      */
-    private class OscTask extends AsyncTask {
+    private class OscTask extends AsyncTask<Void, Void, Void> {
 
         @Override
-        protected Object doInBackground(Object[] payload) {
-            OSCMessage message = new OSCMessage("/bpm", Arrays.asList(payload));
-            try {
-                oscPort.send(message);
-            } catch (IOException e) {
-                e.printStackTrace();
+        protected Void doInBackground(Void... voids) {
+            while (shouldSend) {
+                int bpm = ThreadLocalRandom.current().nextInt(50, 121);
+                Object[] payload = new Object[]{bpm};
+                OSCMessage message = new OSCMessage("/bpm", Arrays.asList(payload));
+                try {
+                    oscPort.send(message);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    TimeUnit.SECONDS.sleep(5);
+                } catch (InterruptedException e) {
+                    break;
+                }
             }
             return null;
         }
+
     }
 
     public void goBack(View view) {
+        shouldSend = false;
         finish();
     }
 }
