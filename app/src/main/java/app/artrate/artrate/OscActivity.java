@@ -64,8 +64,14 @@ public class OscActivity extends AppCompatActivity {
 
     }
 
-    public void goBack(View view) {
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
         shouldSend = false;
+    }
+
+    public void goBack(View view) {
+//        shouldSend = false;
         finish();
     }
 }
