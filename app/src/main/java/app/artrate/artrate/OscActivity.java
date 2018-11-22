@@ -4,9 +4,12 @@ import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.TextView;
 
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortOut;
+
+import org.w3c.dom.Text;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -20,11 +23,13 @@ public class OscActivity extends AppCompatActivity {
 
     private OSCPortOut oscPort;
     private boolean shouldSend;
+    TextView bpmText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_osc);
+        bpmText = (TextView) findViewById(R.id.BPM);
         try {
             oscPort = new OSCPortOut(Inet4Address.getByName("192.168.178.28"), 5005);
         } catch (SocketException e) {
@@ -53,6 +58,7 @@ public class OscActivity extends AppCompatActivity {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+                bpmText.setText(Integer.toString(bpm));
                 try {
                     TimeUnit.SECONDS.sleep(5);
                 } catch (InterruptedException e) {
@@ -71,7 +77,6 @@ public class OscActivity extends AppCompatActivity {
     }
 
     public void goBack(View view) {
-//        shouldSend = false;
         finish();
     }
 }
