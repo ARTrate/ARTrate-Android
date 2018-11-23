@@ -9,6 +9,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ListView;
 
 import com.polidea.rxandroidble2.RxBleClient;
@@ -157,7 +158,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void startOsc(View view) {
+        EditText ipField = findViewById(R.id.inputIP);
+        String ip = ipField.getText().toString();
         Intent intent = new Intent(MainActivity.this, OscActivity.class);
+        intent.putExtra("IP", ip);
         startActivity(intent);
     }
 }

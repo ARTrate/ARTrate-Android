@@ -24,14 +24,17 @@ public class OscActivity extends AppCompatActivity {
     private OSCPortOut oscPort;
     private boolean shouldSend;
     TextView bpmText;
+    private String ip;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_osc);
         bpmText = (TextView) findViewById(R.id.BPM);
+        Bundle extras = getIntent().getExtras();
+        ip = extras.getString("IP");
         try {
-            oscPort = new OSCPortOut(Inet4Address.getByName("192.168.178.28"), 5005);
+            oscPort = new OSCPortOut(Inet4Address.getByName(ip), 5005);
         } catch (SocketException e) {
             e.printStackTrace();
         } catch (UnknownHostException e) {
