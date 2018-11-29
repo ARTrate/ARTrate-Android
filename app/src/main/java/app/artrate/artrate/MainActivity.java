@@ -1,9 +1,10 @@
 package app.artrate.artrate;
 
 import android.Manifest;
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.support.v4.app.ActivityCompat;
@@ -11,32 +12,51 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Pair;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
 
+import com.polidea.rxandroidble2.NotificationSetupMode;
 import com.polidea.rxandroidble2.RxBleClient;
+import com.polidea.rxandroidble2.RxBleConnection;
 import com.polidea.rxandroidble2.RxBleDevice;
-import com.polidea.rxandroidble2.scan.ScanFilter;
+import com.polidea.rxandroidble2.internal.RxBleLog;
 import com.polidea.rxandroidble2.scan.ScanSettings;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import io.reactivex.Observable;
+import io.reactivex.Single;
 import io.reactivex.disposables.Disposable;
 
+/**
+ * This activity handles all the bluetooth things
+ */
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_ENABLE_BT = 1;
     private static final int LOCATION_PERMISSION_REQUEST = 738;
+    private static final int HEART_RATE_SERVICE = 0x180D;
+    private static final int HEART_RATE_MEASUREMENT_CHAR = 0x2A37;
+    private static final int HEART_RATE_CHAR_CONFIG = 0x2902;
+    private static final int HEART_RATE_CONTROL_PIONT_CHAR = 0x2A39;
+    private static final int CLIENT_CHARACTERISTIC_CONFIG = 0x2902;
+    private Button scanOrConnectButton;
+    private boolean scanningForDevices = false;
     private BluetoothAdapter BA;
-    private RxBleClient rxBleClient;
     private Disposable scanSubscription;
+    private Disposable deviceSubscription;
     private Disposable gattSubscription;
-    public byte[] hr;
+    private int hr;
+    public ListView btList;
+    public ArrayAdapter<RxBleDevice> deviceList;
+    public ArrayList<RxBleDevice> bleDevices = new ArrayList<>();
+    private int selectedDevice = -1;
 
     public class HRResult {
         final byte[] hrService;
@@ -50,51 +70,30 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    ListView btList;
-    ArrayAdapter<RxBleDevice> deviceList;
-    //ArrayAdapter<String> btNames;
-    //ArrayList<String> deviceNames = new ArrayList<>();
-    ArrayList<RxBleDevice> bleDevices = new ArrayList<>();
-    int selectedDevice = -1;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        scanOrConnectButton = findViewById(R.id.button_scan_or_connect);
         BA = BluetoothAdapter.getDefaultAdapter();
         initBT();
-        //btNames = new ArrayAdapter<>(this, android.R.layout.simple_list_item_single_choice, deviceNames);
-        deviceList = new ArrayAdapter<RxBleDevice>(this, android.R.layout.simple_list_item_single_choice);
-        btList = (ListView) findViewById(R.id.btList);
+        deviceList = new ArrayAdapter<>(this, android.R.layout.simple_list_item_single_choice);
+        btList = findViewById(R.id.btList);
         btList.setAdapter(deviceList);
         btList.setOnItemClickListener((parent, view, position, id) -> {
             selectedDevice = position;
             Log.d("Selected Devise is", " " + selectedDevice);
-            getHRData();
+            if (selectedDevice >= 0) {
+                scanOrConnectButton.setText("connect");
+                scanOrConnectButton.setClickable(true);
+            }
         });
-        rxBleClient = rxBleClient.create(this);
 
-        scanSubscription = rxBleClient.scanBleDevices(
-                new ScanSettings.Builder()
-                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                    .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES).build()
-        ).subscribe(
-                rxBleScanResult -> {
-                    RxBleDevice tmp = rxBleScanResult.getBleDevice();
-                    Log.v("Dev found", tmp.getName());
-                    if(tmp.getName() != null && !bleDevices.contains(tmp)){
-                        bleDevices.add(tmp);
-                        //deviceNames.add(tmp.getName());
-                        deviceList.add(tmp);
-                    }
-                },
-                throwable -> {
-                    Log.e("Error: ", throwable.getMessage());
-                }
-        );
     }
 
+    /**
+     * Initialisation of the BT adapter, also looking if location permission granted
+     */
     private void initBT() {
         // Checks for the Bluetooth support and then makes sure it is turned on
         // If it isn't turned on, request to turn it on
@@ -117,6 +116,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Converts an Gatt int to an UUID
+     * @param i int to convert
+     * @return UUID to use
+     */
     private UUID convertFromInteger(int i) {
 
         final long MSB = 0x0000000000001000L;
@@ -126,31 +130,54 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    public void getHRData(){
+    /**
+     * Reads the data from the heart rate sensor
+     */
+    private void readHRData(){
         if(selectedDevice >= 0) {
-            /*gattSubscription = bleDevices.get(selectedDevice).establishConnection(false)
-                    .flatMapSingle(rxBleConnection -> rxBleConnection.readCharacteristic(convertFromInteger(0x2A37)))
-                    .subscribe(
-                            characteristicValue -> {
-                                Log.v("got val", characteristicValue.toString());
-                                hr = characteristicValue;
-                            },
-                            throwable -> {
-                                Log.e("Gatt Error", throwable.getMessage());
-                            }
-                    );*/
-            gattSubscription = bleDevices.get(selectedDevice).establishConnection(false)
-                    .flatMapSingle(rxBleConnection -> rxBleConnection.readCharacteristic(convertFromInteger(0x180D)))
-                    .subscribe(
-                            services -> {
-                                Log.v("Offered Services", services.toString());
 
-                            },
-                            throwable -> {
-                                Log.e("Gatt Error", throwable.getMessage());
-                            }
-                    );
+            UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+            deviceSubscription = bleDevices.get(selectedDevice).establishConnection(false)
+                    .flatMap(rxBleConnection  -> rxBleConnection.writeDescriptor(convertFromInteger(HEART_RATE_SERVICE),
+                            convertFromInteger(HEART_RATE_MEASUREMENT_CHAR), clientCharacteristicConfigDescriptorUuid,
+                            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE).toObservable()
+                            .flatMap(ignore1 -> rxBleConnection.writeCharacteristic(convertFromInteger(HEART_RATE_CONTROL_PIONT_CHAR), new byte[]{1, 1}).toObservable()
+                            .flatMap(ignore2 -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR)))))
+                    .flatMap(notificationObs -> notificationObs).subscribe(
+                            bytes -> {
+                                    Log.d(">>> data from device ", bytes.toString());
+                                },
+                                        throwable -> {
+                                            Log.e("Error reading HR", throwable.getMessage());
+                                        }
+                                );
         }
+    }
+
+    /**
+     * Scans for nearby BT devices
+     */
+    private void scanBTDevices() {
+        RxBleClient rxBleClient = RxBleClient.create(this);
+        rxBleClient.setLogLevel(RxBleLog.DEBUG);
+        scanSubscription = rxBleClient.scanBleDevices(
+                new ScanSettings.Builder()
+                        .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                        .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES).build()
+        ).subscribe(
+                rxBleScanResult -> {
+                    RxBleDevice tmp = rxBleScanResult.getBleDevice();
+                    Log.v("Dev found", tmp.getName());
+                    if(tmp.getName() != null && !bleDevices.contains(tmp)){
+                        bleDevices.add(tmp);
+                        deviceList.add(tmp);
+                        deviceList.notifyDataSetChanged();
+                    }
+                },
+                throwable -> {
+                    Log.e("Error: ", throwable.getMessage());
+                }
+        );
     }
 
     /* It is called when an activity completes.*/
@@ -162,11 +189,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void OnConnectClick(View view) {
-        scanSubscription.dispose();
-        startOsc(view);
+    /**
+     * handles the button presses
+     * @param view
+     */
+    public void OnScanOrConnectClick(View view) {
+        if(!scanningForDevices){
+            scanningForDevices = true;
+            scanBTDevices();
+            scanOrConnectButton.setText("scanning...");
+            scanOrConnectButton.setClickable(false);
+        } else {
+            scanSubscription.dispose();
+            readHRData();
+            startOsc(view);
+        }
     }
 
+    /**
+     * Starts the OSC Activity
+     * @param view
+     */
     public void startOsc(View view) {
         EditText ipField = findViewById(R.id.inputIP);
         String ip = ipField.getText().toString();
@@ -175,12 +218,17 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+
+    public void onStop () {
+        deviceSubscription.dispose();
+        super.onStop();
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            String permissions[], int[] grantResults) {
         switch (requestCode) {
             case LOCATION_PERMISSION_REQUEST: {
-                // If request is cancelled, the result arrays are empty.
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     return;
@@ -189,9 +237,6 @@ public class MainActivity extends AppCompatActivity {
                 }
                 return;
             }
-
-            // other 'case' lines to check for other
-            // permissions this app might request.
         }
     }
 }
