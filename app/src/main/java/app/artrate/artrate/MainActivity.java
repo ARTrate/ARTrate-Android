@@ -134,23 +134,22 @@ public class MainActivity extends AppCompatActivity {
      * Reads the data from the heart rate sensor
      */
     private void readHRData(){
-        if(selectedDevice >= 0) {
+        if(true) {
 
-            UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+            //UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
             deviceSubscription = bleDevices.get(selectedDevice).establishConnection(false)
-                    .flatMap(rxBleConnection  -> rxBleConnection.writeDescriptor(convertFromInteger(HEART_RATE_SERVICE),
-                            convertFromInteger(HEART_RATE_MEASUREMENT_CHAR), clientCharacteristicConfigDescriptorUuid,
-                            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE).toObservable()
-                            .flatMap(ignore1 -> rxBleConnection.writeCharacteristic(convertFromInteger(HEART_RATE_CONTROL_PIONT_CHAR), new byte[]{1, 1}).toObservable()
-                            .flatMap(ignore2 -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR)))))
-                    .flatMap(notificationObs -> notificationObs).subscribe(
-                            bytes -> {
-                                    Log.d(">>> data from device ", bytes.toString());
-                                },
-                                        throwable -> {
-                                            Log.e("Error reading HR", throwable.getMessage());
-                                        }
-                                );
+                .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR))
+                    .doOnNext(notificationObservable -> {
+                        Log.d("testtesttest", notificationObservable.toString());
+                    })
+                    .flatMap(notificationObservable -> notificationObservable)).subscribe(
+                        bytes -> {
+                                Log.d(">>> data from device ", bytes.toString());
+                            },
+                                throwable -> {
+                                    Log.e("Error reading HR", throwable.getMessage());
+                                }
+                    );
         }
     }
 
@@ -202,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             scanSubscription.dispose();
             readHRData();
-            startOsc(view);
+           // startOsc(view);
         }
     }
 
