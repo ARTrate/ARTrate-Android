@@ -138,19 +138,48 @@ public class MainActivity extends AppCompatActivity {
 
             UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
             deviceSubscription = bleDevices.get(selectedDevice).establishConnection(false)
-                    .flatMap(rxBleConnection  -> rxBleConnection.writeDescriptor(convertFromInteger(HEART_RATE_SERVICE),
-                            convertFromInteger(HEART_RATE_MEASUREMENT_CHAR), clientCharacteristicConfigDescriptorUuid,
-                            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE).toObservable()
-                            .flatMap(ignore1 -> rxBleConnection.writeCharacteristic(convertFromInteger(HEART_RATE_CONTROL_PIONT_CHAR), new byte[]{1, 1}).toObservable()
-                            .flatMap(ignore2 -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR)))))
-                    .flatMap(notificationObs -> notificationObs).subscribe(
+                    .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR))
+                            .doOnNext(notificationObservable -> {
+                                Log.d("testtesttest", notificationObservable.toString());
+                            })
+                            .flatMap(notificationObservable -> notificationObservable)).subscribe(
                             bytes -> {
-                                    Log.d(">>> data from device ", bytes.toString());
-                                },
-                                        throwable -> {
-                                            Log.e("Error reading HR", throwable.getMessage());
-                                        }
-                                );
+                                hr = extractHRfromBytes(bytes);
+                                //Log.d(">>> data from device ", bytes.toString());
+                                for (byte b: bytes) {
+                                    Log.d("current hr", " " + hr);
+                                }
+                            },
+                            throwable -> {
+                                Log.e("Error reading HR", throwable.getMessage());
+                            }
+                    );
+        }
+    }
+
+    /**
+     * Extracts the HR from the received bytes from the BT device
+     * @param bytes received bytearray
+     * @return heartrate
+     */
+    private int extractHRfromBytes (byte[] bytes) {
+        // this is how the byte is defined https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.heart_rate_measurement.xml
+        if (bytes.length < 2) {
+            // something is not good
+            return -1;
+        }
+
+        //
+        byte flags = bytes[0];
+        if ((flags & 0x01) == 1) {
+            // 16 bit uint meas
+            byte one = bytes[1];
+            byte two = bytes[2];
+            return (int) (two<<8 + one);
+        } else {
+            // 8 bit uint meas
+            byte bit8meas = bytes[1];
+            return bit8meas;
         }
     }
 
@@ -202,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             scanSubscription.dispose();
             readHRData();
-            startOsc(view);
+            //startOsc(view);
         }
     }
 
@@ -220,7 +249,12 @@ public class MainActivity extends AppCompatActivity {
 
 
     public void onStop () {
-        deviceSubscription.dispose();
+        if (deviceSubscription != null) {
+            deviceSubscription.dispose();
+        }
+        if (scanSubscription!= null) {
+            scanSubscription.dispose();
+        }
         super.onStop();
     }
 
