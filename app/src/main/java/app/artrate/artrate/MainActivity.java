@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -18,7 +19,10 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 
+import com.illposed.osc.OSCMessage;
+import com.illposed.osc.OSCPortOut;
 import com.polidea.rxandroidble2.NotificationSetupMode;
 import com.polidea.rxandroidble2.RxBleClient;
 import com.polidea.rxandroidble2.RxBleConnection;
@@ -26,9 +30,16 @@ import com.polidea.rxandroidble2.RxBleDevice;
 import com.polidea.rxandroidble2.internal.RxBleLog;
 import com.polidea.rxandroidble2.scan.ScanSettings;
 
+import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Observable;
 import io.reactivex.Single;
@@ -57,6 +68,10 @@ public class MainActivity extends AppCompatActivity {
     public ArrayAdapter<RxBleDevice> deviceList;
     public ArrayList<RxBleDevice> bleDevices = new ArrayList<>();
     private int selectedDevice = -1;
+    private boolean shouldSend;
+    private String ip;
+    private OSCPortOut oscPort;
+    TextView bpmText;
 
     public class HRResult {
         final byte[] hrService;
@@ -128,33 +143,6 @@ public class MainActivity extends AppCompatActivity {
         long value = i & 0xFFFFFFFF;
         return new UUID(MSB | (value << 32), LSB);
 
-    }
-
-    /**
-     * Reads the data from the heart rate sensor
-     */
-    private void readHRData(){
-        if(selectedDevice >= 0) {
-
-            UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-            deviceSubscription = bleDevices.get(selectedDevice).establishConnection(false)
-                    .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR))
-                            .doOnNext(notificationObservable -> {
-                                Log.d("testtesttest", notificationObservable.toString());
-                            })
-                            .flatMap(notificationObservable -> notificationObservable)).subscribe(
-                            bytes -> {
-                                hr = extractHRfromBytes(bytes);
-                                //Log.d(">>> data from device ", bytes.toString());
-                                for (byte b: bytes) {
-                                    Log.d("current hr", " " + hr);
-                                }
-                            },
-                            throwable -> {
-                                Log.e("Error reading HR", throwable.getMessage());
-                            }
-                    );
-        }
     }
 
     /**
@@ -230,23 +218,39 @@ public class MainActivity extends AppCompatActivity {
             scanOrConnectButton.setClickable(false);
         } else {
             scanSubscription.dispose();
-            readHRData();
-            //startOsc(view);
+            //readHRData();
+            new BluetoothTask().execute();
+            startOsc();
         }
     }
 
     /**
-     * Starts the OSC Activity
-     * @param view
+     * Starts the OSC Client
+     *
      */
-    public void startOsc(View view) {
+    public void startOsc() {
+        shouldSend = true;
         EditText ipField = findViewById(R.id.inputIP);
-        String ip = ipField.getText().toString();
-        Intent intent = new Intent(MainActivity.this, OscActivity.class);
-        intent.putExtra("IP", ip);
-        startActivity(intent);
+        ip = ipField.getText().toString();
+        setContentView(R.layout.activity_osc);
+        bpmText = findViewById(R.id.BPM);
+        try {
+            oscPort = new OSCPortOut(Inet4Address.getByName(ip), 5005);
+        } catch (SocketException e) {
+            e.printStackTrace();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+        new OscTask().execute();
     }
 
+    /**
+     * STop the OSC client
+     */
+    public void stopOsc(View view) {
+        shouldSend = false;
+        setContentView(R.layout.activity_main);
+    }
 
     public void onStop () {
         if (deviceSubscription != null) {
@@ -272,5 +276,65 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
         }
+    }
+
+    /**
+     * Class for asynchronous bluetooth operation
+     */
+    public class BluetoothTask extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            if(selectedDevice >= 0) {
+
+                UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+                deviceSubscription = bleDevices.get(selectedDevice).establishConnection(false)
+                        .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR))
+                                .doOnNext(notificationObservable -> {
+                                    Log.d("testtesttest", notificationObservable.toString());
+                                })
+                                .flatMap(notificationObservable -> notificationObservable)).subscribe(
+                                bytes -> {
+                                    hr = extractHRfromBytes(bytes);
+                                    //Log.d(">>> data from device ", bytes.toString());
+                                    for (byte b: bytes) {
+                                        Log.d("current hr", " " + hr);
+                                    }
+                                },
+                                throwable -> {
+                                    Log.e("Error reading HR", throwable.getMessage());
+                                }
+                        );
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Class for asynchronous network operations
+     */
+    private class OscTask extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            while (shouldSend) {
+//                int bpm = ThreadLocalRandom.current().nextInt(50, 121);
+                Object[] payload = new Object[]{hr};
+                OSCMessage message = new OSCMessage("/bpm", Arrays.asList(payload));
+                try {
+                    oscPort.send(message);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                bpmText.setText(Integer.toString(hr));
+                try {
+                    TimeUnit.SECONDS.sleep(1);
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+            return null;
+        }
+
     }
 }
