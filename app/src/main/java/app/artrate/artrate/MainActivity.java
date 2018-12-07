@@ -8,6 +8,8 @@ import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
+import android.os.Build;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -150,6 +152,7 @@ public class MainActivity extends AppCompatActivity {
      * @param bytes received bytearray
      * @return heartrate
      */
+    @RequiresApi(api = Build.VERSION_CODES.O)
     private int extractHRfromBytes (byte[] bytes) {
         // this is how the byte is defined https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.heart_rate_measurement.xml
         if (bytes.length < 2) {
@@ -163,11 +166,11 @@ public class MainActivity extends AppCompatActivity {
             // 16 bit uint meas
             byte one = bytes[1];
             byte two = bytes[2];
-            return (int) (two<<8 + one);
+            return 0 + two<<8 + one;
         } else {
             // 8 bit uint meas
             byte bit8meas = bytes[1];
-            return bit8meas;
+            return Byte.toUnsignedInt(bit8meas);
         }
     }
 
