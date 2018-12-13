@@ -255,14 +255,18 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
     }
 
-    public void onStop () {
+    /**
+     * when app is closed
+     */
+    @Override
+    public void onDestroy () {
         if (deviceSubscription != null) {
             deviceSubscription.dispose();
         }
         if (scanSubscription!= null) {
             scanSubscription.dispose();
         }
-        super.onStop();
+        super.onDestroy();
     }
 
     @Override
