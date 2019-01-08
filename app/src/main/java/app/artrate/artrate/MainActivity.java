@@ -56,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int LOCATION_PERMISSION_REQUEST = 738;
     private static final int HEART_RATE_SERVICE = 0x180D;
     private static final int HEART_RATE_MEASUREMENT_CHAR = 0x2A37;
+    private static final int RESPIRATION_RATE_UUID_CHAR = 0x2222;
     private static final int HEART_RATE_CHAR_CONFIG = 0x2902;
     private static final int HEART_RATE_CONTROL_PIONT_CHAR = 0x2A39;
     private static final int CLIENT_CHARACTERISTIC_CONFIG = 0x2902;
@@ -66,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private Disposable deviceSubscription;
     private Disposable gattSubscription;
     private int hr;
+    private String rrString;
     public ListView btList;
     public ArrayAdapter<RxBleDevice> deviceList;
     public ArrayList<RxBleDevice> bleDevices = new ArrayList<>();
@@ -75,15 +77,13 @@ public class MainActivity extends AppCompatActivity {
     private OSCPortOut oscPort;
     TextView bpmText;
 
-    public class HRResult {
-        final byte[] hrService;
-        final byte[] hrMeas;
-        final byte[] hrControl;
+    public class ArtrateRes {
+        byte[] heartRate;
+        byte[] respirationRate;
 
-        HRResult(byte[] hrService, byte[] hrMeas, byte[] hrControl){
-            this.hrControl = hrControl;
-            this.hrMeas = hrMeas;
-            this.hrService = hrService;
+        ArtrateRes(byte[] hr, byte[] rr) {
+            this.heartRate = hr;
+            this.respirationRate = rr;
         }
     }
 
@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
         // Checks for the Bluetooth support and then makes sure it is turned on
         // If it isn't turned on, request to turn it on
         // List paired devices
-        if(BA==null) {
+        if (BA == null) {
             return;
         } else {
             if (BA.isEnabled()) {
@@ -135,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Converts an Gatt int to an UUID
+     *
      * @param i int to convert
      * @return UUID to use
      */
@@ -149,11 +150,12 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Extracts the HR from the received bytes from the BT device
+     *
      * @param bytes received bytearray
      * @return heartrate
      */
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private int extractHRfromBytes (byte[] bytes) {
+    private int extractHRfromBytes(byte[] bytes) {
         // this is how the byte is defined https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.characteristic.heart_rate_measurement.xml
         if (bytes.length < 2) {
             // something is not good
@@ -166,7 +168,7 @@ public class MainActivity extends AppCompatActivity {
             // 16 bit uint meas
             byte one = bytes[1];
             byte two = bytes[2];
-            return 0 + two<<8 + one;
+            return 0 + two << 8 + one;
         } else {
             // 8 bit uint meas
             byte bit8meas = bytes[1];
@@ -188,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
                 rxBleScanResult -> {
                     RxBleDevice tmp = rxBleScanResult.getBleDevice();
                     Log.v("Dev found", tmp.getName());
-                    if(tmp.getName() != null && !bleDevices.contains(tmp)){
+                    if (tmp.getName() != null && !bleDevices.contains(tmp)) {
                         bleDevices.add(tmp);
                         deviceList.add(tmp);
                         deviceList.notifyDataSetChanged();
@@ -211,10 +213,11 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * handles the button presses
+     *
      * @param view
      */
     public void OnScanOrConnectClick(View view) {
-        if(!scanningForDevices){
+        if (!scanningForDevices) {
             scanningForDevices = true;
             scanBTDevices();
             scanOrConnectButton.setText("scanning...");
@@ -229,7 +232,6 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * Starts the OSC Client
-     *
      */
     public void startOsc() {
         shouldSend = true;
@@ -259,11 +261,11 @@ public class MainActivity extends AppCompatActivity {
      * when app is closed
      */
     @Override
-    public void onDestroy () {
+    public void onDestroy() {
         if (deviceSubscription != null) {
             deviceSubscription.dispose();
         }
-        if (scanSubscription!= null) {
+        if (scanSubscription != null) {
             scanSubscription.dispose();
         }
         super.onDestroy();
@@ -292,29 +294,74 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected Void doInBackground(Void... voids) {
-            if(selectedDevice >= 0) {
-
-                UUID clientCharacteristicConfigDescriptorUuid = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-                deviceSubscription = bleDevices.get(selectedDevice).establishConnection(false)
-                        .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR))
-                                .doOnNext(notificationObservable -> {
-                                    Log.d("testtesttest", notificationObservable.toString());
-                                })
-                                .flatMap(notificationObservable -> notificationObservable)).subscribe(
-                                bytes -> {
-                                    hr = extractHRfromBytes(bytes);
-                                    //Log.d(">>> data from device ", bytes.toString());
-                                    for (byte b: bytes) {
-                                        Log.d("current hr", " " + hr);
+            if (selectedDevice >= 0) {
+                RxBleDevice device = bleDevices.get(selectedDevice);
+                if (device.getName() == "ARTrate") {
+                    // our sensor is detected --> subscribe to rr values
+                    deviceSubscription = device.establishConnection(false)
+                            .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(RESPIRATION_RATE_UUID_CHAR))
+                                    .doOnNext(notificationObservable -> {
+                                        Log.d("testtesttest", notificationObservable.toString());
+                                    })
+                                    .flatMap(notificationObservable -> notificationObservable)).subscribe(
+                                    bytes -> {
+                                        rrString = buildRrString(bytes);
+                                        //Log.d(">>> data from device ", bytes.toString());
+                                        for (byte b : bytes) {
+                                            Log.d("current hr", rrString);
+                                        }
+                                    },
+                                    throwable -> {
+                                        Log.e("Error reading HR", throwable.getMessage());
                                     }
-                                },
-                                throwable -> {
-                                    Log.e("Error reading HR", throwable.getMessage());
-                                }
-                        );
+                            );
+                } else {
+                    // connect to an normal HR sensor
+                    deviceSubscription = device.establishConnection(false)
+                            .flatMap(rxBleConnection -> rxBleConnection.setupNotification(convertFromInteger(HEART_RATE_MEASUREMENT_CHAR))
+                                    .doOnNext(notificationObservable -> {
+                                        Log.d("testtesttest", notificationObservable.toString());
+                                    })
+                                    .flatMap(notificationObservable -> notificationObservable)).subscribe(
+                                    bytes -> {
+                                        hr = extractHRfromBytes(bytes);
+                                        //Log.d(">>> data from device ", bytes.toString());
+                                        for (byte b : bytes) {
+                                            Log.d("current hr", " " + hr);
+                                        }
+                                    },
+                                    throwable -> {
+                                        Log.e("Error reading HR", throwable.getMessage());
+                                    }
+                            );
+                }
             }
             return null;
         }
+    }
+
+
+    private String buildRrString(byte[] bytes) {
+        int[] xs = new int[3];
+        int[] ys = new int[3];
+        int[] zs = new int[3];
+
+        for (int i = 0; i < 6; i += 2) {
+            xs[i / 2] = (bytes[i + 1] << 8) | bytes[i];
+        }
+
+        for (int i = 6; i < 12; i += 2) {
+            ys[i / 2] = (bytes[i + 1] << 8) | bytes[i];
+        }
+
+        for (int i = 12; i < 18; i += 2) {
+            zs[i / 2] = (bytes[i + 1] << 8) | bytes[i];
+        }
+
+        String result = xs[0] + "," + ys[0] + "," + zs[0] + "," +
+                xs[1] + "," + ys[1] + "," + zs[1] + "," +
+                xs[2] + "," + ys[2] + "," + zs[2] + ",";
+        return result;
     }
 
     /**
@@ -342,6 +389,5 @@ public class MainActivity extends AppCompatActivity {
             }
             return null;
         }
-
     }
 }
