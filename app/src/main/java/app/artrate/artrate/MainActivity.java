@@ -2,9 +2,6 @@ package app.artrate.artrate;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
@@ -15,7 +12,6 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
-import android.util.Pair;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -25,9 +21,7 @@ import android.widget.TextView;
 
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortOut;
-import com.polidea.rxandroidble2.NotificationSetupMode;
 import com.polidea.rxandroidble2.RxBleClient;
-import com.polidea.rxandroidble2.RxBleConnection;
 import com.polidea.rxandroidble2.RxBleDevice;
 import com.polidea.rxandroidble2.internal.RxBleLog;
 import com.polidea.rxandroidble2.scan.ScanSettings;
@@ -38,13 +32,9 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
-import io.reactivex.Observable;
-import io.reactivex.Single;
 import io.reactivex.disposables.Disposable;
 
 /**
@@ -67,6 +57,7 @@ public class MainActivity extends AppCompatActivity {
     private Disposable deviceSubscription;
     private Disposable gattSubscription;
     private int hr;
+    private String rawRrData;
     private String rrString;
     public ListView btList;
     public ArrayAdapter<RxBleDevice> deviceList;
@@ -246,7 +237,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
-        new OscTask().execute();
+        new BpmTask().execute();
     }
 
     /**
@@ -365,9 +356,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Class for asynchronous network operations
+     * Class for asynchronous network operations sending Heart Rate Data
      */
-    private class OscTask extends AsyncTask<Void, Void, Void> {
+    private class BpmTask extends AsyncTask<Void, Void, Void> {
 
         @Override
         protected Void doInBackground(Void... voids) {
@@ -383,6 +374,31 @@ public class MainActivity extends AppCompatActivity {
                 bpmText.setText(Integer.toString(hr));
                 try {
                     TimeUnit.SECONDS.sleep(1);
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Class for asynchronous network operations sending RR Data
+     */
+    private class RrTask extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            while (shouldSend) {
+                Object[] payload = new Object[]{rawRrData};
+                OSCMessage message = new OSCMessage("/RR", Arrays.asList(payload));
+                try {
+                    oscPort.send(message);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    TimeUnit.MILLISECONDS.sleep(60);
                 } catch (InterruptedException e) {
                     break;
                 }
