@@ -398,6 +398,7 @@ public class MainActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
                 try {
+                    // 60 miliseconds for a sample rate of 50 and 3 data points per String
                     TimeUnit.MILLISECONDS.sleep(60);
                 } catch (InterruptedException e) {
                     break;
