@@ -4,6 +4,8 @@ import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
@@ -32,6 +34,7 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Formatter;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -53,6 +56,9 @@ public class MainActivity extends AppCompatActivity {
     private Button scanOrConnectButton;
     private boolean scanningForDevices = false;
     private BluetoothAdapter BA;
+    private WifiManager WM;
+    private WifiInfo wifiInf;
+    private String own_ip;
     private Disposable scanSubscription;
     private Disposable deviceSubscription;
     private Disposable gattSubscription;
@@ -84,6 +90,10 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         scanOrConnectButton = findViewById(R.id.button_scan_or_connect);
         BA = BluetoothAdapter.getDefaultAdapter();
+        WM = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        wifiInf = WM.getConnectionInfo();
+        int ipAddress = wifiInf.getIpAddress();
+        own_ip = String.format("%d.%d.%d.%d", (ipAddress & 0xff),(ipAddress >> 8 & 0xff),(ipAddress >> 16 & 0xff),(ipAddress >> 24 & 0xff));
         initBT();
         deviceList = new ArrayAdapter<>(this, android.R.layout.simple_list_item_single_choice);
         btList = findViewById(R.id.btList);
@@ -140,7 +150,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Extracts the HR from the received bytes from the BT device
+     * Extracts the HR from the received bytes from the BT deviceroid get
      *
      * @param bytes received bytearray
      * @return heartrate
@@ -364,7 +374,7 @@ public class MainActivity extends AppCompatActivity {
         protected Void doInBackground(Void... voids) {
             while (shouldSend) {
 //                int bpm = ThreadLocalRandom.current().nextInt(50, 121);
-                Object[] payload = new Object[]{hr};
+                Object[] payload = new Object[]{own_ip, hr};
                 OSCMessage message = new OSCMessage("/bpm", Arrays.asList(payload));
                 try {
                     oscPort.send(message);
