@@ -8,6 +8,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.os.Build;
+import android.os.ParcelUuid;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -26,6 +27,7 @@ import com.illposed.osc.OSCPortOut;
 import com.polidea.rxandroidble2.RxBleClient;
 import com.polidea.rxandroidble2.RxBleDevice;
 import com.polidea.rxandroidble2.internal.RxBleLog;
+import com.polidea.rxandroidble2.scan.ScanFilter;
 import com.polidea.rxandroidble2.scan.ScanSettings;
 
 import java.io.IOException;
@@ -186,7 +188,8 @@ public class MainActivity extends AppCompatActivity {
         scanSubscription = rxBleClient.scanBleDevices(
                 new ScanSettings.Builder()
                         .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                        .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES).build()
+                        .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES).build(),
+                new ScanFilter.Builder().setServiceUuid(ParcelUuid.fromString(convertFromInteger(HEART_RATE_SERVICE).toString())).build()
         ).subscribe(
                 rxBleScanResult -> {
                     RxBleDevice tmp = rxBleScanResult.getBleDevice();
