@@ -68,12 +68,13 @@ public class MainActivity extends AppCompatActivity {
     private String rawRrData;
     private String rrString;
     public ListView btList;
-    public ArrayAdapter<RxBleDevice> deviceList;
+    public ArrayAdapter<String> deviceList;
     public ArrayList<RxBleDevice> bleDevices = new ArrayList<>();
     private int selectedDevice = -1;
     private boolean shouldSend;
     private String ip;
     private OSCPortOut oscPort;
+    private BluetoothTask bluetoothTask;
     TextView bpmText;
 
     public class ArtrateRes {
@@ -196,7 +197,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.v("Dev found", tmp.getName());
                     if (tmp.getName() != null && !bleDevices.contains(tmp)) {
                         bleDevices.add(tmp);
-                        deviceList.add(tmp);
+                        deviceList.add(tmp.getName());
                         deviceList.notifyDataSetChanged();
                     }
                 },
@@ -229,7 +230,11 @@ public class MainActivity extends AppCompatActivity {
         } else {
             scanSubscription.dispose();
             //readHRData();
-            new BluetoothTask().execute();
+            scanningForDevices = false;
+            scanOrConnectButton.setText("rescan");
+            scanOrConnectButton.setClickable(false);
+            bluetoothTask = new BluetoothTask();
+            bluetoothTask.execute();
             startOsc();
         }
     }
@@ -258,6 +263,13 @@ public class MainActivity extends AppCompatActivity {
      */
     public void stopOsc(View view) {
         shouldSend = false;
+        finish();
+        System.exit(0);
+        // clean previos scanned devices:
+        bleDevices = new ArrayList<>();
+        deviceList = new ArrayAdapter<>(this, android.R.layout.simple_list_item_single_choice);
+        bluetoothTask.cancel(true);
+        deviceList.notifyDataSetChanged();
         setContentView(R.layout.activity_main);
     }
 
@@ -341,6 +353,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             return null;
+        }
+
+        @Override
+        protected void onCancelled() {
+            super.onCancelled();
+            deviceSubscription.dispose();
         }
     }
 
