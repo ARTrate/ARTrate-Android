@@ -37,6 +37,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Formatter;
+import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -76,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
     private OSCPortOut oscPort;
     private BluetoothTask bluetoothTask;
     TextView bpmText;
+    private int id;
 
     public class ArtrateRes {
         byte[] heartRate;
@@ -109,7 +111,8 @@ public class MainActivity extends AppCompatActivity {
                 scanOrConnectButton.setClickable(true);
             }
         });
-
+        Random r = new Random();
+        id = r.nextInt(Integer.MAX_VALUE);
     }
 
     /**
@@ -395,7 +398,7 @@ public class MainActivity extends AppCompatActivity {
         protected Void doInBackground(Void... voids) {
             while (shouldSend) {
 //                int bpm = ThreadLocalRandom.current().nextInt(50, 121);
-                Object[] payload = new Object[]{own_ip, hr};
+                Object[] payload = new Object[]{id, hr};
                 OSCMessage message = new OSCMessage("/bpm", Arrays.asList(payload));
                 try {
                     oscPort.send(message);
